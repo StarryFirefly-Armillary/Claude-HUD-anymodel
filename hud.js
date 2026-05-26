@@ -31,22 +31,33 @@ let outTok = ctx?.total_output_tokens ?? ctx?.current_usage?.output_tokens ?? nu
 let cost = D.cost?.total_cost_usd ?? null;
 let rate5h = D.rate_limits?.five_hour?.used_percentage ?? null;
 
-// Restore from cache when current is null (transient spike)
-if (usedPct == null && cache.pct != null) usedPct = cache.pct;
+// Restore from cache when current is null or 0 (transient spike)
+if ((usedPct == null || usedPct === 0) && cache.pct > 0) usedPct = cache.pct;
 if (ctxSize == null && cache.ctxSize != null) ctxSize = cache.ctxSize;
 if (inTok == null && cache.inTok != null) inTok = cache.inTok;
 if (outTok == null && cache.outTok != null) outTok = cache.outTok;
 if (cost == null && cache.cost != null) cost = cache.cost;
 if (rate5h == null && cache.rate5h != null) rate5h = cache.rate5h;
 
+// Fallback: compute percentage from tokens if still missing
+if ((usedPct == null || usedPct === 0) && inTok > 0 && ctxSize > 0)
+  usedPct = (inTok / ctxSize) * 100;
+
 // Update cache: only store values that are actively present in current data
 const next = { ts: Date.now() };
 if (ctx?.used_percentage > 0) next.pct = ctx.used_percentage;
+else if (cache.pct > 0) next.pct = cache.pct;
+if (usedPct > 0) next.pct = usedPct; // also cache computed value
 if (ctx?.context_window_size > 0) next.ctxSize = ctx.context_window_size;
+else if (cache.ctxSize > 0) next.ctxSize = cache.ctxSize;
 if (ctx?.total_input_tokens > 0 || ctx?.current_usage?.input_tokens > 0) next.inTok = inTok;
+else if (cache.inTok > 0) next.inTok = cache.inTok;
 if (ctx?.total_output_tokens > 0 || ctx?.current_usage?.output_tokens > 0) next.outTok = outTok;
+else if (cache.outTok > 0) next.outTok = cache.outTok;
 if (D.cost?.total_cost_usd > 0) next.cost = cost;
+else if (cache.cost > 0) next.cost = cache.cost;
 if (D.rate_limits?.five_hour?.used_percentage > 0) next.rate5h = rate5h;
+else if (cache.rate5h > 0) next.rate5h = cache.rate5h;
 try { fs.writeFileSync(cacheFile, JSON.stringify(next)); } catch {}
 
 // --- Colors ---
