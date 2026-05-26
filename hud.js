@@ -23,7 +23,15 @@ try {
 } catch {}
 
 const ctx = D.context_window;
-const model = D.model?.display_name || D.model?.id || '?';
+let model = D.model?.display_name || D.model?.id || '?';
+
+// Check if proxy switched model (e.g. for images)
+try {
+  const mState = JSON.parse(fs.readFileSync(path.join(__dirname, '.hud-model-state.json'), 'utf8'));
+  if (mState.actual && mState.ts && Date.now() - mState.ts < 300000) {
+    model = mState.actual;
+  }
+} catch {}
 let usedPct = ctx?.used_percentage ?? null;
 let ctxSize = ctx?.context_window_size ?? null;
 let inTok = ctx?.total_input_tokens ?? ctx?.current_usage?.input_tokens ?? null;
@@ -78,8 +86,7 @@ function fmtTok(n) {
 
 // --- Render ---
 const pStr = usedPct != null ? cp(usedPct) + usedPct.toFixed(1) + '%' + R : DM + '?' + R;
-const ctxStr = ctxSize != null ? ` (${fmtTok(inTok)}/${fmtTok(ctxSize)})` : '';
-const parts = [model, `ctx ${pStr}${ctxStr} [${bar(usedPct, 15)}]`, `${DM}in${R} ${fmtTok(inTok)}  ${DM}out${R} ${fmtTok(outTok)}`];
+const parts = [model, `ctx ${pStr} [${bar(usedPct, 15)}]`, `${DM}in${R} ${fmtTok(inTok)}  ${DM}out${R} ${fmtTok(outTok)}`];
 if (cost != null && cost > 0) parts.push('$' + cost.toFixed(2));
 if (rate5h != null) { const c = cr(rate5h); parts.push(`5h ${c}${rate5h.toFixed(0)}%${c ? R : ''}`); }
 process.stdout.write(parts.join('  ') + '\n');
