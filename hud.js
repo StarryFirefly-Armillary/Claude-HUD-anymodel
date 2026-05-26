@@ -14,10 +14,14 @@ const input = (() => {
 let D;
 try { D = JSON.parse(input); } catch { D = {}; }
 
-// --- Cache: smooth out transient null/0 spikes ---
+// --- Cache: smooth out transient null spikes within a session ---
 const cacheFile = path.join(__dirname, '.hud-cache.json');
 let cache = {};
-try { cache = JSON.parse(fs.readFileSync(cacheFile, 'utf8')); } catch {}
+try {
+  cache = JSON.parse(fs.readFileSync(cacheFile, 'utf8'));
+  // Expire cache after 2 minutes (new session = fresh start)
+  if (!cache.ts || Date.now() - cache.ts > 120000) cache = {};
+} catch {}
 
 const ctx = D.context_window;
 const model = D.model?.display_name || D.model?.id || '?';
@@ -27,20 +31,25 @@ let outTok = ctx?.total_output_tokens ?? ctx?.current_usage?.output_tokens ?? nu
 let cost = D.cost?.total_cost_usd ?? null;
 let rate5h = D.rate_limits?.five_hour?.used_percentage ?? null;
 
-// Use cached values when current is null/0 but we had a valid previous value
+// Restore from cache when current is null (transient spike)
 if (usedPct == null && cache.pct != null) usedPct = cache.pct;
 if (inTok == null && cache.inTok != null) inTok = cache.inTok;
 if (outTok == null && cache.outTok != null) outTok = cache.outTok;
 if (cost == null && cache.cost != null) cost = cache.cost;
 if (rate5h == null && cache.rate5h != null) rate5h = cache.rate5h;
 
-// Update cache with valid values (null means unknown, don't overwrite)
-const next = { ...cache };
-if (ctx?.used_percentage != null) next.pct = ctx.used_percentage;
-if (inTok != null) next.inTok = inTok;
-if (outTok != null) next.outTok = outTok;
-if (cost != null) next.cost = cost;
-if (rate5h != null) next.rate5h = rate5h;
+// Update cache: only store non-null, non-zero values (0 at session start is meaningless)
+const next = { ts: Date.now() };
+if (ctx?.used_percentage > 0) next.pct = ctx.used_percentage;
+else if (cache.pct > 0) next.pct = cache.pct;
+if (inTok > 0) next.inTok = inTok;
+else if (cache.inTok > 0) next.inTok = cache.inTok;
+if (outTok > 0) next.outTok = outTok;
+else if (cache.outTok > 0) next.outTok = cache.outTok;
+if (cost > 0) next.cost = cost;
+else if (cache.cost > 0) next.cost = cache.cost;
+if (rate5h > 0) next.rate5h = rate5h;
+else if (cache.rate5h > 0) next.rate5h = cache.rate5h;
 try { fs.writeFileSync(cacheFile, JSON.stringify(next)); } catch {}
 
 // --- Colors ---
