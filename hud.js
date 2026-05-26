@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 const fs = require('fs');
+const path = require('path');
 
 const input = (() => {
   let d = '';
@@ -13,14 +14,36 @@ const input = (() => {
 let D;
 try { D = JSON.parse(input); } catch { D = {}; }
 
+// --- Cache: smooth out transient null/0 spikes ---
+const cacheFile = path.join(__dirname, '.hud-cache.json');
+let cache = {};
+try { cache = JSON.parse(fs.readFileSync(cacheFile, 'utf8')); } catch {}
+
 const ctx = D.context_window;
 const model = D.model?.display_name || D.model?.id || '?';
-const usedPct = ctx?.used_percentage ?? null;
-const inTok = ctx?.total_input_tokens ?? ctx?.current_usage?.input_tokens ?? null;
-const outTok = ctx?.total_output_tokens ?? ctx?.current_usage?.output_tokens ?? null;
-const cost = D.cost?.total_cost_usd ?? null;
-const rate5h = D.rate_limits?.five_hour?.used_percentage ?? null;
+let usedPct = ctx?.used_percentage ?? null;
+let inTok = ctx?.total_input_tokens ?? ctx?.current_usage?.input_tokens ?? null;
+let outTok = ctx?.total_output_tokens ?? ctx?.current_usage?.output_tokens ?? null;
+let cost = D.cost?.total_cost_usd ?? null;
+let rate5h = D.rate_limits?.five_hour?.used_percentage ?? null;
 
+// Use cached values when current is null/0 but we had a valid previous value
+if (usedPct == null && cache.pct != null) usedPct = cache.pct;
+if (inTok == null && cache.inTok != null) inTok = cache.inTok;
+if (outTok == null && cache.outTok != null) outTok = cache.outTok;
+if (cost == null && cache.cost != null) cost = cache.cost;
+if (rate5h == null && cache.rate5h != null) rate5h = cache.rate5h;
+
+// Update cache with valid values (null means unknown, don't overwrite)
+const next = { ...cache };
+if (ctx?.used_percentage != null) next.pct = ctx.used_percentage;
+if (inTok != null) next.inTok = inTok;
+if (outTok != null) next.outTok = outTok;
+if (cost != null) next.cost = cost;
+if (rate5h != null) next.rate5h = rate5h;
+try { fs.writeFileSync(cacheFile, JSON.stringify(next)); } catch {}
+
+// --- Colors ---
 const R = '\x1b[0m', G = '\x1b[32m', Y = '\x1b[33m', RD = '\x1b[31m', DM = '\x1b[2m';
 function cp(p) { return p == null ? '' : p > 85 ? RD : p > 60 ? Y : G; }
 function cr(p) { return p == null ? '' : p > 90 ? RD : p > 70 ? Y : ''; }
@@ -36,6 +59,7 @@ function fmtTok(n) {
   return String(n);
 }
 
+// --- Render ---
 const pStr = usedPct != null ? cp(usedPct) + usedPct.toFixed(1) + '%' + R : DM + '?' + R;
 const parts = [model, `ctx ${pStr} [${bar(usedPct, 15)}]`, `${fmtTok(inTok)}/${fmtTok(outTok)}`];
 if (cost != null) parts.push('$' + cost.toFixed(2));
