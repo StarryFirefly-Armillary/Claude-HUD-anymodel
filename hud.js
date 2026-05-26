@@ -86,7 +86,8 @@ function fmtTok(n) {
 
 // --- Render ---
 const pStr = usedPct != null ? cp(usedPct) + usedPct.toFixed(1) + '%' + R : DM + '?' + R;
-const parts = [model, `ctx ${pStr} [${bar(usedPct, 15)}]`, `${DM}in${R} ${fmtTok(inTok)}  ${DM}out${R} ${fmtTok(outTok)}`];
+const ctxTotal = ctxSize != null ? ` / ${fmtTok(ctxSize)}` : '';
+const parts = [model, `ctx ${pStr}${ctxTotal} [${bar(usedPct, 15)}]`, `${DM}in${R} ${fmtTok(inTok)}  ${DM}out${R} ${fmtTok(outTok)}`];
 if (cost != null && cost > 0) parts.push('$' + cost.toFixed(2));
 if (rate5h != null) { const c = cr(rate5h); parts.push(`5h ${c}${rate5h.toFixed(0)}%${c ? R : ''}`); }
 process.stdout.write(parts.join('  ') + '\n');
