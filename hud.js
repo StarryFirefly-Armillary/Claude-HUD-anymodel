@@ -26,6 +26,7 @@ try {
 const ctx = D.context_window;
 const model = D.model?.display_name || D.model?.id || '?';
 let usedPct = ctx?.used_percentage ?? null;
+let ctxSize = ctx?.context_window_size ?? null;
 let inTok = ctx?.total_input_tokens ?? ctx?.current_usage?.input_tokens ?? null;
 let outTok = ctx?.total_output_tokens ?? ctx?.current_usage?.output_tokens ?? null;
 let cost = D.cost?.total_cost_usd ?? null;
@@ -33,6 +34,7 @@ let rate5h = D.rate_limits?.five_hour?.used_percentage ?? null;
 
 // Restore from cache when current is null (transient spike)
 if (usedPct == null && cache.pct != null) usedPct = cache.pct;
+if (ctxSize == null && cache.ctxSize != null) ctxSize = cache.ctxSize;
 if (inTok == null && cache.inTok != null) inTok = cache.inTok;
 if (outTok == null && cache.outTok != null) outTok = cache.outTok;
 if (cost == null && cache.cost != null) cost = cache.cost;
@@ -42,6 +44,8 @@ if (rate5h == null && cache.rate5h != null) rate5h = cache.rate5h;
 const next = { ts: Date.now() };
 if (ctx?.used_percentage > 0) next.pct = ctx.used_percentage;
 else if (cache.pct > 0) next.pct = cache.pct;
+if (ctx?.context_window_size > 0) next.ctxSize = ctx.context_window_size;
+else if (cache.ctxSize > 0) next.ctxSize = cache.ctxSize;
 if (inTok > 0) next.inTok = inTok;
 else if (cache.inTok > 0) next.inTok = cache.inTok;
 if (outTok > 0) next.outTok = outTok;
@@ -70,7 +74,8 @@ function fmtTok(n) {
 
 // --- Render ---
 const pStr = usedPct != null ? cp(usedPct) + usedPct.toFixed(1) + '%' + R : DM + '?' + R;
-const parts = [model, `ctx ${pStr} [${bar(usedPct, 15)}]`, `${fmtTok(inTok)}/${fmtTok(outTok)}`];
+const ctxStr = ctxSize != null ? ` (${fmtTok(inTok ?? 0)}/${fmtTok(ctxSize)})` : '';
+const parts = [model, `ctx ${pStr}${ctxStr} [${bar(usedPct, 15)}]`, `${DM}in${R} ${fmtTok(inTok)}  ${DM}out${R} ${fmtTok(outTok)}`];
 if (cost != null) parts.push('$' + cost.toFixed(2));
 if (rate5h != null) { const c = cr(rate5h); parts.push(`5h ${c}${rate5h.toFixed(0)}%${c ? R : ''}`); }
 process.stdout.write(parts.join('  ') + '\n');
